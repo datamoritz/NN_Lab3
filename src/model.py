@@ -87,7 +87,7 @@ class TextEncoder(nn.Module):
             dropout=dropout,
             batch_first=True,           # expect [B, T, E] not [T, B, E]
         )
-        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers, enable_nested_tensor=False)
 
         self.dropout = nn.Dropout(dropout)
         self.max_len = max_len
