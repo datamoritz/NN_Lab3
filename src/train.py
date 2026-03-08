@@ -50,6 +50,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.dataset import VizWizBinaryDataset, build_vocab
 from src.model import VizWizBinaryClassifier
 
+
+def find_image_dir(base: Path) -> Path:
+    """Return the directory that actually contains .jpg files.
+    Handles zips that extract into a subdirectory (e.g. train/train/*.jpg)."""
+    if any(base.glob("*.jpg")):
+        return base
+    for sub in sorted(base.iterdir()):
+        if sub.is_dir() and any(sub.glob("*.jpg")):
+            return sub
+    raise FileNotFoundError(f"No .jpg files found under {base}")
+
 # -------------------------------------------------------
 # Config
 # -------------------------------------------------------
@@ -58,8 +69,12 @@ from src.model import VizWizBinaryClassifier
 DATA_ROOT      = Path("/content/data")
 TRAIN_IMAGE_DIR = DATA_ROOT / "train"
 VAL_IMAGE_DIR   = DATA_ROOT / "val"
-TRAIN_ANN_PATH  = DATA_ROOT / "Annotations" / "train.json"
-VAL_ANN_PATH    = DATA_ROOT / "Annotations" / "val.json"
+_ann_base       = DATA_ROOT / "Annotations"
+# Handle zips that extract into a subdirectory
+if not (_ann_base / "train.json").exists():
+    _ann_base = next(_ann_base.iterdir())
+TRAIN_ANN_PATH  = _ann_base / "train.json"
+VAL_ANN_PATH    = _ann_base / "val.json"
 
 # Where to save the best checkpoint
 CHECKPOINT_PATH = Path("/content/best_model.pt")
@@ -101,6 +116,7 @@ print(f"Training on: {DEVICE}")
 with open(TRAIN_ANN_PATH) as f:
     all_train = json.load(f)
 
+TRAIN_IMAGE_DIR = find_image_dir(TRAIN_IMAGE_DIR)
 train_available = {p.name for p in TRAIN_IMAGE_DIR.glob("*.jpg")}
 train_annotations = [a for a in all_train if a["image"] in train_available]
 if MAX_TRAIN_SAMPLES is not None:
@@ -109,6 +125,7 @@ if MAX_TRAIN_SAMPLES is not None:
 with open(VAL_ANN_PATH) as f:
     all_val = json.load(f)
 
+VAL_IMAGE_DIR = find_image_dir(VAL_IMAGE_DIR)
 val_available = {p.name for p in VAL_IMAGE_DIR.glob("*.jpg")}
 val_annotations = [a for a in all_val if a["image"] in val_available]
 if MAX_VAL_SAMPLES is not None:
