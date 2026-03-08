@@ -80,13 +80,13 @@ VAL_ANN_PATH    = _ann_base / "val.json"
 CHECKPOINT_PATH = Path("/content/best_model.pt")
 
 # Dataset
-MAX_TRAIN_SAMPLES = 10_000  # assignment cap; set None for full split
-MAX_VAL_SAMPLES   = None
+MAX_TRAIN_SAMPLES = 2000  # assignment cap; set None for full split
+MAX_VAL_SAMPLES   = 1000
 MAX_LEN           = 20
 
 # DataLoader
-BATCH_SIZE  = 64   # larger batch fits easily on a GPU
-NUM_WORKERS = 2    # safe on Colab; set 0 if you hit issues
+BATCH_SIZE  = 128   # larger batch fits easily on a GPU
+NUM_WORKERS = 4    # safe on Colab; set 0 if you hit issues
 
 # Model
 EMBED_DIM  = 256
@@ -95,7 +95,7 @@ NUM_LAYERS = 2
 DROPOUT    = 0.3
 
 # Training
-NUM_EPOCHS = 20
+NUM_EPOCHS = 3
 LR         = 1e-3
 WEIGHT_DECAY = 1e-4
 
