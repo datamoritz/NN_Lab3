@@ -85,7 +85,7 @@ MAX_VAL_SAMPLES   = None
 MAX_LEN           = 20
 
 # DataLoader
-BATCH_SIZE  = 128   # larger batch fits easily on a GPU
+BATCH_SIZE  = 256   # doubled with mixed precision
 NUM_WORKERS = 4    # safe on Colab; set 0 if you hit issues
 
 # Model
@@ -203,8 +203,14 @@ pos_weight = torch.tensor([num_neg / num_pos], dtype=torch.float32).to(DEVICE)
 print(f"Class balance — pos: {num_pos}, neg: {num_neg}, pos_weight: {pos_weight.item():.3f}")
 print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+# Label smoothing: soft targets (0.05/0.95 instead of 0/1) reduce overconfidence
+# near the decision boundary, which directly addresses the val oscillation.
+LABEL_SMOOTH = 0.05
+criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight, label_smoothing=LABEL_SMOOTH)
 optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+
+# Mixed precision scaler — ~2x faster on CUDA, no effect on CPU/MPS
+scaler = torch.amp.GradScaler("cuda", enabled=(DEVICE.type == "cuda"))
 
 # Cosine decay with a non-zero floor so LR never stalls at 0
 WARMUP_EPOCHS = 2
@@ -236,10 +242,13 @@ for epoch in range(1, NUM_EPOCHS + 1):
         labels = batch["label"].to(DEVICE)
 
         optimizer.zero_grad()
-        loss = criterion(model(images, tokens), labels)
-        loss.backward()
+        with torch.amp.autocast("cuda", enabled=(DEVICE.type == "cuda")):
+            loss = criterion(model(images, tokens), labels)
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
+        scaler.step(optimizer)
+        scaler.update()
         train_loss += loss.item()
 
     scheduler.step()
@@ -275,29 +284,60 @@ for epoch in range(1, NUM_EPOCHS + 1):
     )
 
 # -------------------------------------------------------
-# Final Evaluation (best checkpoint)
+# Final Evaluation — threshold scan on val set
 # -------------------------------------------------------
 model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=DEVICE))
 model.eval()
 
-correct = total = tp = tn = fp = fn = 0
+# Collect all val probabilities and labels in one pass
+all_probs  = []
+all_labels = []
 
 with torch.no_grad():
     for batch in val_loader:
         images = batch["image"].to(DEVICE)
         tokens = batch["tokens"].to(DEVICE)
         labels = batch["label"].to(DEVICE)
+        probs  = model(images, tokens).sigmoid()
+        all_probs.append(probs.cpu())
+        all_labels.append(labels.cpu())
 
-        preds = (model(images, tokens).sigmoid() >= 0.5).float()
+all_probs  = torch.cat(all_probs)   # [N, 1]
+all_labels = torch.cat(all_labels)  # [N, 1]
 
-        correct += (preds == labels).sum().item()
-        total   += labels.size(0)
-        tp += ((preds == 1) & (labels == 1)).sum().item()
-        tn += ((preds == 0) & (labels == 0)).sum().item()
-        fp += ((preds == 1) & (labels == 0)).sum().item()
-        fn += ((preds == 0) & (labels == 1)).sum().item()
+# Scan thresholds 0.30 – 0.70 and pick the one with best balanced accuracy
+best_thresh = 0.5
+best_bal_acc = 0.0
 
-accuracy = (tp + tn) / (tp + tn + fp + fn)
-print(f"\nFinal val accuracy (best checkpoint): {accuracy:.4f}")
+for t in [i / 100 for i in range(30, 71)]:
+    preds = (all_probs >= t).float()
+    tp_ = ((preds == 1) & (all_labels == 1)).sum().item()
+    tn_ = ((preds == 0) & (all_labels == 0)).sum().item()
+    fp_ = ((preds == 1) & (all_labels == 0)).sum().item()
+    fn_ = ((preds == 0) & (all_labels == 1)).sum().item()
+    tpr = tp_ / (tp_ + fn_ + 1e-8)
+    tnr = tn_ / (tn_ + fp_ + 1e-8)
+    bal = 0.5 * (tpr + tnr)
+    if bal > best_bal_acc:
+        best_bal_acc = bal
+        best_thresh  = t
+
+# Final metrics at best threshold
+preds = (all_probs >= best_thresh).float()
+tp = ((preds == 1) & (all_labels == 1)).sum().item()
+tn = ((preds == 0) & (all_labels == 0)).sum().item()
+fp = ((preds == 1) & (all_labels == 0)).sum().item()
+fn = ((preds == 0) & (all_labels == 1)).sum().item()
+accuracy  = (tp + tn) / (tp + tn + fp + fn)
+tpr = tp / (tp + fn + 1e-8)
+tnr = tn / (tn + fp + 1e-8)
+bal_acc = 0.5 * (tpr + tnr)
+
+print(f"\nBest threshold (val):  {best_thresh:.2f}")
+print(f"Val accuracy:          {accuracy:.4f}")
+print(f"Balanced accuracy:     {bal_acc:.4f}  (TPR={tpr:.4f}, TNR={tnr:.4f})")
 print(f"  TP={tp}  TN={tn}  FP={fp}  FN={fn}")
-print(f"Best val acc seen during training:    {best_val_acc:.4f}")
+print(f"Best val acc (training): {best_val_acc:.4f}")
+
+# Save the best threshold so inference.py can use it
+torch.save({"threshold": best_thresh}, "/content/best_threshold.pt")
