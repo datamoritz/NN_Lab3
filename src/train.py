@@ -203,10 +203,11 @@ pos_weight = torch.tensor([num_neg / num_pos], dtype=torch.float32).to(DEVICE)
 print(f"Class balance — pos: {num_pos}, neg: {num_neg}, pos_weight: {pos_weight.item():.3f}")
 print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-# Label smoothing: soft targets (0.05/0.95 instead of 0/1) reduce overconfidence
-# near the decision boundary, which directly addresses the val oscillation.
+# Label smoothing for BCE: soft targets (0.05/0.95 instead of 0/1).
+# Applied manually to labels before loss, since BCEWithLogitsLoss has no
+# label_smoothing argument (unlike CrossEntropyLoss).
 LABEL_SMOOTH = 0.05
-criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight, label_smoothing=LABEL_SMOOTH)
+criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
 
 # Mixed precision scaler — ~2x faster on CUDA, no effect on CPU/MPS
@@ -242,8 +243,10 @@ for epoch in range(1, NUM_EPOCHS + 1):
         labels = batch["label"].to(DEVICE)
 
         optimizer.zero_grad()
+        # Smooth labels: 0 -> LABEL_SMOOTH, 1 -> 1 - LABEL_SMOOTH
+        smooth_labels = labels * (1 - LABEL_SMOOTH) + LABEL_SMOOTH / 2
         with torch.amp.autocast("cuda", enabled=(DEVICE.type == "cuda")):
-            loss = criterion(model(images, tokens), labels)
+            loss = criterion(model(images, tokens), smooth_labels)
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
