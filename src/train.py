@@ -80,8 +80,8 @@ VAL_ANN_PATH    = _ann_base / "val.json"
 CHECKPOINT_PATH = Path("/content/best_model.pt")
 
 # Dataset
-MAX_TRAIN_SAMPLES = 5000  # assignment cap; set None for full split
-MAX_VAL_SAMPLES   = 1500
+MAX_TRAIN_SAMPLES = 10_000  # assignment cap; set None for full split
+MAX_VAL_SAMPLES   = None
 MAX_LEN           = 20
 
 # DataLoader
@@ -95,7 +95,7 @@ NUM_LAYERS = 2
 DROPOUT    = 0.3
 
 # Training
-NUM_EPOCHS = 5
+NUM_EPOCHS = 20
 LR         = 1e-3
 WEIGHT_DECAY = 1e-4
 
@@ -205,7 +205,19 @@ print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
 criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS)
+
+# Cosine decay with a non-zero floor so LR never stalls at 0
+WARMUP_EPOCHS = 2
+cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer, T_max=NUM_EPOCHS - WARMUP_EPOCHS, eta_min=1e-5
+)
+# Linear warmup: scale LR from 0 -> 1 over WARMUP_EPOCHS
+warmup_scheduler = torch.optim.lr_scheduler.LinearLR(
+    optimizer, start_factor=1e-3, end_factor=1.0, total_iters=WARMUP_EPOCHS
+)
+scheduler = torch.optim.lr_scheduler.SequentialLR(
+    optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[WARMUP_EPOCHS]
+)
 
 # -------------------------------------------------------
 # Training Loop
@@ -226,6 +238,7 @@ for epoch in range(1, NUM_EPOCHS + 1):
         optimizer.zero_grad()
         loss = criterion(model(images, tokens), labels)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         optimizer.step()
         train_loss += loss.item()
 

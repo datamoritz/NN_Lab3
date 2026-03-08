@@ -5,7 +5,7 @@ import torch.nn as nn
 
 class ImageEncoder(nn.Module):
     """
-    CNN image encoder with three convolutional blocks.
+    CNN image encoder with four convolutional blocks.
 
     Each block: Conv2d -> BatchNorm -> ReLU -> MaxPool
       - BatchNorm stabilizes training by normalizing activations per batch.
@@ -36,7 +36,13 @@ class ImageEncoder(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(2),            # spatial: H/8, W/8
 
-            # Collapse all remaining spatial positions -> [B, 128, 1, 1]
+            # --- Block 4: 128 -> 256 channels ---
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(),
+            nn.MaxPool2d(2),            # spatial: H/16, W/16
+
+            # Collapse all remaining spatial positions -> [B, 256, 1, 1]
             nn.AdaptiveAvgPool2d((1, 1)),
         )
 
@@ -44,13 +50,13 @@ class ImageEncoder(nn.Module):
         # Dropout here regularizes the image representation before fusion.
         self.proj = nn.Sequential(
             nn.Dropout(0.3),
-            nn.Linear(128, out_dim),
+            nn.Linear(256, out_dim),
             nn.ReLU(),
         )
 
     def forward(self, x):
-        x = self.cnn(x)      # [B, 128, 1, 1]
-        x = x.flatten(1)     # [B, 128]
+        x = self.cnn(x)      # [B, 256, 1, 1]
+        x = x.flatten(1)     # [B, 256]
         x = self.proj(x)     # [B, out_dim]
         return x
 
