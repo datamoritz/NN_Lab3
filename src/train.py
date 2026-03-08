@@ -208,7 +208,15 @@ print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 # label_smoothing argument (unlike CrossEntropyLoss).
 LABEL_SMOOTH = 0.05
 criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-optimizer = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=WEIGHT_DECAY)
+
+# Separate LRs: Transformer (text encoder) is more sensitive to large updates
+# and benefits from a lower LR than the CNN and fusion layers.
+optimizer = torch.optim.AdamW([
+    {"params": model.image_encoder.parameters(), "lr": LR},
+    {"params": model.text_encoder.parameters(),  "lr": LR * 0.3},
+    {"params": model.fusion.parameters(),         "lr": LR},
+    {"params": model.classifier.parameters(),     "lr": LR},
+], weight_decay=WEIGHT_DECAY)
 
 # Mixed precision scaler — ~2x faster on CUDA, no effect on CPU/MPS
 scaler = torch.amp.GradScaler("cuda", enabled=(DEVICE.type == "cuda"))
@@ -287,60 +295,33 @@ for epoch in range(1, NUM_EPOCHS + 1):
     )
 
 # -------------------------------------------------------
-# Final Evaluation — threshold scan on val set
+# Final Evaluation (best checkpoint, threshold = 0.5)
 # -------------------------------------------------------
+THRESHOLD = 0.5
+
 model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=DEVICE))
 model.eval()
 
-# Collect all val probabilities and labels in one pass
-all_probs  = []
-all_labels = []
+tp = tn = fp = fn = 0
 
 with torch.no_grad():
     for batch in val_loader:
         images = batch["image"].to(DEVICE)
         tokens = batch["tokens"].to(DEVICE)
         labels = batch["label"].to(DEVICE)
-        probs  = model(images, tokens).sigmoid()
-        all_probs.append(probs.cpu())
-        all_labels.append(labels.cpu())
 
-all_probs  = torch.cat(all_probs)   # [N, 1]
-all_labels = torch.cat(all_labels)  # [N, 1]
+        preds = (model(images, tokens).sigmoid() >= THRESHOLD).float()
+        tp += ((preds == 1) & (labels == 1)).sum().item()
+        tn += ((preds == 0) & (labels == 0)).sum().item()
+        fp += ((preds == 1) & (labels == 0)).sum().item()
+        fn += ((preds == 0) & (labels == 1)).sum().item()
 
-# Scan thresholds 0.30 – 0.70 and pick the one with best balanced accuracy
-best_thresh = 0.5
-best_bal_acc = 0.0
-
-for t in [i / 100 for i in range(30, 71)]:
-    preds = (all_probs >= t).float()
-    tp_ = ((preds == 1) & (all_labels == 1)).sum().item()
-    tn_ = ((preds == 0) & (all_labels == 0)).sum().item()
-    fp_ = ((preds == 1) & (all_labels == 0)).sum().item()
-    fn_ = ((preds == 0) & (all_labels == 1)).sum().item()
-    tpr = tp_ / (tp_ + fn_ + 1e-8)
-    tnr = tn_ / (tn_ + fp_ + 1e-8)
-    bal = 0.5 * (tpr + tnr)
-    if bal > best_bal_acc:
-        best_bal_acc = bal
-        best_thresh  = t
-
-# Final metrics at best threshold
-preds = (all_probs >= best_thresh).float()
-tp = ((preds == 1) & (all_labels == 1)).sum().item()
-tn = ((preds == 0) & (all_labels == 0)).sum().item()
-fp = ((preds == 1) & (all_labels == 0)).sum().item()
-fn = ((preds == 0) & (all_labels == 1)).sum().item()
-accuracy  = (tp + tn) / (tp + tn + fp + fn)
+accuracy = (tp + tn) / (tp + tn + fp + fn)
 tpr = tp / (tp + fn + 1e-8)
 tnr = tn / (tn + fp + 1e-8)
 bal_acc = 0.5 * (tpr + tnr)
 
-print(f"\nBest threshold (val):  {best_thresh:.2f}")
-print(f"Val accuracy:          {accuracy:.4f}")
-print(f"Balanced accuracy:     {bal_acc:.4f}  (TPR={tpr:.4f}, TNR={tnr:.4f})")
+print(f"\nFinal val accuracy (threshold=0.5): {accuracy:.4f}")
+print(f"Balanced accuracy:                  {bal_acc:.4f}  (TPR={tpr:.4f}, TNR={tnr:.4f})")
 print(f"  TP={tp}  TN={tn}  FP={fp}  FN={fn}")
-print(f"Best val acc (training): {best_val_acc:.4f}")
-
-# Save the best threshold so inference.py can use it
-torch.save({"threshold": best_thresh}, "/content/best_threshold.pt")
+print(f"Best val acc seen during training:  {best_val_acc:.4f}")
