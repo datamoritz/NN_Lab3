@@ -80,8 +80,8 @@ VAL_ANN_PATH    = _ann_base / "val.json"
 CHECKPOINT_PATH = Path("/content/best_model.pt")
 
 # Dataset
-MAX_TRAIN_SAMPLES = 2000  # assignment cap; set None for full split
-MAX_VAL_SAMPLES   = 1000
+MAX_TRAIN_SAMPLES = 5000  # assignment cap; set None for full split
+MAX_VAL_SAMPLES   = 1500
 MAX_LEN           = 20
 
 # DataLoader
@@ -95,7 +95,7 @@ NUM_LAYERS = 2
 DROPOUT    = 0.3
 
 # Training
-NUM_EPOCHS = 3
+NUM_EPOCHS = 5
 LR         = 1e-3
 WEIGHT_DECAY = 1e-4
 
