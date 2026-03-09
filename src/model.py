@@ -8,8 +8,8 @@ class ImageEncoder(nn.Module):
     CNN image encoder with four convolutional blocks + spatial patch output.
 
     Instead of collapsing the feature map to a single vector with (1,1) pooling,
-    we use AdaptiveAvgPool2d((4,4)) to produce a 4x4 = 16 spatial patch grid.
-    Each patch is projected to embed_dim, giving a sequence of 16 visual tokens
+    we use AdaptiveAvgPool2d((7,7)) to produce a 7x7 = 49 spatial patch grid.
+    Each patch is projected to embed_dim, giving a sequence of 49 visual tokens
     that CrossAttentionFusion can use for fine-grained spatial attention.
     """
 
@@ -41,8 +41,8 @@ class ImageEncoder(nn.Module):
             nn.ReLU(),
             nn.MaxPool2d(2),            # spatial: H/16, W/16
 
-            # Reduce to fixed 4x4 grid regardless of input resolution.
-            nn.AdaptiveAvgPool2d((4, 4)),
+            # Reduce to fixed 7x7 grid regardless of input resolution.
+            nn.AdaptiveAvgPool2d((7, 7)),
         )
 
         # Project each of the 16 patches from 256 -> out_dim.
@@ -53,10 +53,10 @@ class ImageEncoder(nn.Module):
             nn.ReLU(),
         )
 
-        # Learnable positional embeddings for each of the 16 spatial patches.
+        # Learnable positional embeddings for each of the 49 spatial patches.
         # Without these, the cross-attention has no way to distinguish
         # top-left from bottom-right — spatial layout is completely lost.
-        self.patch_pos = nn.Embedding(16, out_dim)
+        self.patch_pos = nn.Embedding(49, out_dim)
 
     def forward(self, x):
         x = self.cnn(x)                          # [B, 256, 4, 4]
