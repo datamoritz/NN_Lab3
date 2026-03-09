@@ -86,7 +86,7 @@ CHECKPOINT_PATH = Path("/content/best_model.pt")
 #   - 10 epochs
 # Set False for the final full-quality run.
 # -------------------------------------------------------
-FAST_MODE = True
+FAST_MODE = False
 
 IMG_SIZE          = 128        if FAST_MODE else 224
 MAX_TRAIN_SAMPLES = 5_000      if FAST_MODE else 10_000
@@ -112,7 +112,7 @@ LABEL_SMOOTH  = 0.05
 # Override the auto-computed pos_weight (neg/pos ratio ~0.37).
 # Higher value penalises false positives more → improves TNR.
 # Set to None to use the automatic class-balance ratio.
-POS_WEIGHT_OVERRIDE = 0.28
+POS_WEIGHT_OVERRIDE = None  # use auto class-balance ratio (neg/pos)
 
 # -------------------------------------------------------
 # Device
@@ -328,33 +328,54 @@ for epoch in range(1, NUM_EPOCHS + 1):
     )
 
 # -------------------------------------------------------
-# Final Evaluation (best checkpoint, threshold = 0.5)
+# Final Evaluation — threshold scan maximising raw accuracy
 # -------------------------------------------------------
-THRESHOLD = 0.5
-
 model.load_state_dict(torch.load(CHECKPOINT_PATH, map_location=DEVICE))
 model.eval()
 
-tp = tn = fp = fn = 0
-
+# Collect all val probabilities in one pass
+all_probs  = []
+all_labels = []
 with torch.no_grad():
     for batch in val_loader:
         images = batch["image"].to(DEVICE)
         tokens = batch["tokens"].to(DEVICE)
         labels = batch["label"].to(DEVICE)
+        all_probs.append(model(images, tokens).sigmoid().cpu())
+        all_labels.append(labels.cpu())
 
-        preds = (model(images, tokens).sigmoid() >= THRESHOLD).float()
-        tp += ((preds == 1) & (labels == 1)).sum().item()
-        tn += ((preds == 0) & (labels == 0)).sum().item()
-        fp += ((preds == 1) & (labels == 0)).sum().item()
-        fn += ((preds == 0) & (labels == 1)).sum().item()
+all_probs  = torch.cat(all_probs)   # [N, 1]
+all_labels = torch.cat(all_labels)  # [N, 1]
 
-accuracy = (tp + tn) / (tp + tn + fp + fn)
+# Scan thresholds 0.30–0.70, pick the one with highest raw accuracy
+# (raw accuracy = assignment metric)
+best_thresh   = 0.5
+best_accuracy = 0.0
+
+for t in [i / 100 for i in range(30, 71)]:
+    preds = (all_probs >= t).float()
+    acc = (preds == all_labels).float().mean().item()
+    if acc > best_accuracy:
+        best_accuracy = acc
+        best_thresh   = t
+
+# Compute full metrics at best threshold
+preds = (all_probs >= best_thresh).float()
+tp = ((preds == 1) & (all_labels == 1)).sum().item()
+tn = ((preds == 0) & (all_labels == 0)).sum().item()
+fp = ((preds == 1) & (all_labels == 0)).sum().item()
+fn = ((preds == 0) & (all_labels == 1)).sum().item()
+accuracy  = (tp + tn) / (tp + tn + fp + fn)
 tpr = tp / (tp + fn + 1e-8)
 tnr = tn / (tn + fp + 1e-8)
 bal_acc = 0.5 * (tpr + tnr)
 
-print(f"\nFinal val accuracy (threshold=0.5): {accuracy:.4f}")
-print(f"Balanced accuracy:                  {bal_acc:.4f}  (TPR={tpr:.4f}, TNR={tnr:.4f})")
+print(f"\nBest threshold (max raw acc on val): {best_thresh:.2f}")
+print(f"Val accuracy:                        {accuracy:.4f}")
+print(f"Balanced accuracy:                   {bal_acc:.4f}  (TPR={tpr:.4f}, TNR={tnr:.4f})")
 print(f"  TP={tp}  TN={tn}  FP={fp}  FN={fn}")
-print(f"Best val acc seen during training:  {best_val_acc:.4f}")
+print(f"Best val acc seen during training:   {best_val_acc:.4f}")
+
+# Save threshold for test inference
+torch.save({"threshold": best_thresh}, "/content/best_threshold.pt")
+print(f"Threshold saved to /content/best_threshold.pt")
