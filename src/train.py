@@ -79,14 +79,24 @@ VAL_ANN_PATH    = _ann_base / "val.json"
 # Where to save the best checkpoint
 CHECKPOINT_PATH = Path("/content/best_model.pt")
 
-# Dataset
-MAX_TRAIN_SAMPLES = 10_000  # assignment cap; set None for full split
-MAX_VAL_SAMPLES   = None
+# -------------------------------------------------------
+# Fast mode — set True for quick hyperparameter search:
+#   - 128x128 images  (~4x fewer pixels to process)
+#   - 5000 train / 2000 val samples
+#   - 10 epochs
+# Set False for the final full-quality run.
+# -------------------------------------------------------
+FAST_MODE = True
+
+IMG_SIZE          = 128        if FAST_MODE else 224
+MAX_TRAIN_SAMPLES = 5_000      if FAST_MODE else 10_000
+MAX_VAL_SAMPLES   = 2_000      if FAST_MODE else None
+NUM_EPOCHS        = 10         if FAST_MODE else 20
 MAX_LEN           = 20
 
 # DataLoader
-BATCH_SIZE  = 256   # doubled with mixed precision
-NUM_WORKERS = 4    # safe on Colab; set 0 if you hit issues
+BATCH_SIZE  = 256
+NUM_WORKERS = 4
 
 # Model
 EMBED_DIM  = 256
@@ -95,7 +105,6 @@ NUM_LAYERS = 2
 DROPOUT    = 0.3
 
 # Training
-NUM_EPOCHS = 20
 LR         = 1e-3
 WEIGHT_DECAY = 1e-4
 
@@ -108,7 +117,7 @@ elif torch.backends.mps.is_available():
     DEVICE = torch.device("mps")
 else:
     DEVICE = torch.device("cpu")
-print(f"Training on: {DEVICE}")
+print(f"Training on: {DEVICE}  |  {'FAST MODE (128px, 5k samples, 10 epochs)' if FAST_MODE else 'FULL MODE (224px, 10k samples, 20 epochs)'}")
 
 # -------------------------------------------------------
 # Annotations
@@ -137,7 +146,7 @@ print(f"Train: {len(train_annotations)} samples | Val: {len(val_annotations)} sa
 # Transforms
 # -------------------------------------------------------
 train_transform = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize((IMG_SIZE, IMG_SIZE)),
     transforms.RandomHorizontalFlip(),
     transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
     transforms.ToTensor(),
@@ -145,7 +154,7 @@ train_transform = transforms.Compose([
 ])
 
 val_transform = transforms.Compose([
-    transforms.Resize((224, 224)),
+    transforms.Resize((IMG_SIZE, IMG_SIZE)),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
