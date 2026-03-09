@@ -112,7 +112,7 @@ LABEL_SMOOTH  = 0.05
 # Override the auto-computed pos_weight (neg/pos ratio ~0.37).
 # Higher value penalises false positives more → improves TNR.
 # Set to None to use the automatic class-balance ratio.
-POS_WEIGHT_OVERRIDE = 1.0
+POS_WEIGHT_OVERRIDE = 0.2
 
 # -------------------------------------------------------
 # Device
