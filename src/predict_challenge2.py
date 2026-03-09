@@ -85,10 +85,13 @@ def main():
     gate_threshold = torch.load(args.threshold_path, map_location="cpu")["threshold"]
     print(f"Gate threshold (p_answerable): {gate_threshold:.2f} — images below this → 'unanswerable'")
 
-    # ---- Generator model ----
+    # ---- Generator model — architecture read from checkpoint ----
+    num_layers = gen_ckpt.get("num_layers", 2)   # default 2 for old checkpoints
+    embed_dim  = gen_ckpt.get("embed_dim",  256)
+    print(f"Generator architecture: embed_dim={embed_dim}, num_layers={num_layers}")
     generator = VizWizAnswerGenerator(
         q_vocab_size=len(q_vocab), ans_vocab_size=len(ans_vocab),
-        embed_dim=256, num_heads=4, num_layers=2,
+        embed_dim=embed_dim, num_heads=4, num_layers=num_layers,
         q_max_len=20, ans_max_len=12, dropout=0.3,
         sos_idx=SOS_IDX, eos_idx=EOS_IDX,
     ).to(device)

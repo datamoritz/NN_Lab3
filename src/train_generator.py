@@ -299,6 +299,8 @@ for epoch in range(1, NUM_EPOCHS + 1):
             "model_state": model.state_dict(),
             "q_vocab":     q_vocab,
             "ans_vocab":   ans_vocab,
+            "num_layers":  NUM_LAYERS,   # saved so predict script can auto-match
+            "embed_dim":   EMBED_DIM,
         }, CHECKPOINT_PATH)
 
     print(
