@@ -18,10 +18,13 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_root = Path(__file__).resolve().parent.parent
+_src  = Path(__file__).resolve().parent
+sys.path.insert(0, str(_root))
+sys.path.insert(0, str(_src))
 
 from src.dataset import VizWizAnswerDataset, build_vocab, build_answer_vocab
-from src.models.answer_generator import VizWizAnswerGenerator
+from models.answer_generator import VizWizAnswerGenerator
 
 
 def find_image_dir(base: Path) -> Path:

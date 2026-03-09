@@ -18,10 +18,13 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from PIL import Image
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_root = Path(__file__).resolve().parent.parent
+_src  = Path(__file__).resolve().parent
+sys.path.insert(0, str(_root))
+sys.path.insert(0, str(_src))
 
 from src.dataset import VizWizBinaryDataset, build_vocab
-from src.models.binary_classifier import VizWizBinaryClassifier
+from models.binary_classifier import VizWizBinaryClassifier
 
 
 def find_image_dir(base: Path) -> Path:

@@ -16,13 +16,16 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+_root = Path(__file__).resolve().parent.parent  # NN_Lab3/
+_src  = Path(__file__).resolve().parent          # NN_Lab3/src/
+sys.path.insert(0, str(_root))
+sys.path.insert(0, str(_src))
 
 from src.dataset import (
     VizWizAnswerDataset, build_vocab, build_answer_vocab,
     get_majority_answer, encode_text,
 )
-from src.models.answer_generator import VizWizAnswerGenerator
+from models.answer_generator import VizWizAnswerGenerator
 
 
 def find_image_dir(base: Path) -> Path:
