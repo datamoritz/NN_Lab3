@@ -105,8 +105,10 @@ NUM_LAYERS = 2
 DROPOUT    = 0.3
 
 # Training
-LR         = 1e-3
+LR           = 1e-3
 WEIGHT_DECAY = 1e-4
+WARMUP_EPOCHS = 2
+LABEL_SMOOTH  = 0.05
 
 # -------------------------------------------------------
 # Device
@@ -117,7 +119,23 @@ elif torch.backends.mps.is_available():
     DEVICE = torch.device("mps")
 else:
     DEVICE = torch.device("cpu")
-print(f"Training on: {DEVICE}  |  {'FAST MODE (128px, 5k samples, 10 epochs)' if FAST_MODE else 'FULL MODE (224px, 10k samples, 20 epochs)'}")
+print(
+    f"\n{'='*60}\n"
+    f"  MODE        : {'FAST' if FAST_MODE else 'FULL'}\n"
+    f"  Device      : {DEVICE}\n"
+    f"  --- Data ---\n"
+    f"  IMG_SIZE    : {IMG_SIZE}px\n"
+    f"  Train/Val   : {MAX_TRAIN_SAMPLES} / {MAX_VAL_SAMPLES or 'all'}\n"
+    f"  BATCH_SIZE  : {BATCH_SIZE}  |  NUM_WORKERS: {NUM_WORKERS}\n"
+    f"  --- Model ---\n"
+    f"  EMBED_DIM   : {EMBED_DIM}  |  NUM_HEADS: {NUM_HEADS}  |  NUM_LAYERS: {NUM_LAYERS}\n"
+    f"  DROPOUT     : {DROPOUT}\n"
+    f"  --- Training ---\n"
+    f"  NUM_EPOCHS  : {NUM_EPOCHS}  |  WARMUP: {WARMUP_EPOCHS}\n"
+    f"  LR          : {LR} (text_enc: {LR*0.3})  |  WEIGHT_DECAY: {WEIGHT_DECAY}\n"
+    f"  LABEL_SMOOTH: {LABEL_SMOOTH}\n"
+    f"{'='*60}\n"
+)
 
 # -------------------------------------------------------
 # Annotations
@@ -149,6 +167,10 @@ train_transform = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
     transforms.RandomHorizontalFlip(),
     transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+    # Answerability augmentation: simulate blurry/low-quality images that
+    # are characteristic of unanswerable VizWiz samples.
+    transforms.RandomApply([transforms.GaussianBlur(kernel_size=5, sigma=(0.5, 2.0))], p=0.3),
+    transforms.RandomAdjustSharpness(sharpness_factor=0, p=0.2),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
@@ -212,10 +234,7 @@ pos_weight = torch.tensor([num_neg / num_pos], dtype=torch.float32).to(DEVICE)
 print(f"Class balance — pos: {num_pos}, neg: {num_neg}, pos_weight: {pos_weight.item():.3f}")
 print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-# Label smoothing for BCE: soft targets (0.05/0.95 instead of 0/1).
-# Applied manually to labels before loss, since BCEWithLogitsLoss has no
-# label_smoothing argument (unlike CrossEntropyLoss).
-LABEL_SMOOTH = 0.05
+# Label smoothing applied manually to targets (see config section above)
 criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
 # Separate LRs: Transformer (text encoder) is more sensitive to large updates
@@ -231,7 +250,6 @@ optimizer = torch.optim.AdamW([
 scaler = torch.amp.GradScaler("cuda", enabled=(DEVICE.type == "cuda"))
 
 # Cosine decay with a non-zero floor so LR never stalls at 0
-WARMUP_EPOCHS = 2
 cosine_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     optimizer, T_max=NUM_EPOCHS - WARMUP_EPOCHS, eta_min=1e-5
 )
