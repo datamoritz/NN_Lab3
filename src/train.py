@@ -86,7 +86,7 @@ CHECKPOINT_PATH = Path("/content/best_model.pt")
 #   - 10 epochs
 # Set False for the final full-quality run.
 # -------------------------------------------------------
-FAST_MODE = True
+FAST_MODE = False
 
 IMG_SIZE          = 128        if FAST_MODE else 224
 MAX_TRAIN_SAMPLES = 5_000      if FAST_MODE else 10_000
