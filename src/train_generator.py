@@ -260,6 +260,11 @@ for epoch in range(1, NUM_EPOCHS + 1):
                     correct += 1
                 total += 1
 
+                # Print first 5 predictions per epoch for a sanity check
+                if total <= 5:
+                    q_text = batch["image_name"][i] if "image_name" in batch else f"sample_{total}"
+                    print(f"  [sample {total}] GT: '{targets[i]}' | Pred: '{pred_text}'")
+
     val_acc  = correct / total if total > 0 else 0.0
     avg_loss = train_loss / len(train_loader)
     is_best  = val_acc > best_val_acc
