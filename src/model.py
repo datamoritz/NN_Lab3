@@ -53,13 +53,22 @@ class ImageEncoder(nn.Module):
             nn.ReLU(),
         )
 
+        # Learnable positional embeddings for each of the 16 spatial patches.
+        # Without these, the cross-attention has no way to distinguish
+        # top-left from bottom-right — spatial layout is completely lost.
+        self.patch_pos = nn.Embedding(16, out_dim)
+
     def forward(self, x):
         x = self.cnn(x)                          # [B, 256, 4, 4]
         B, C, H, W = x.shape
         x = x.permute(0, 2, 3, 1)               # [B, 4, 4, 256]
         x = x.reshape(B, H * W, C)              # [B, 16, 256]
         x = self.patch_proj(x)                   # [B, 16, out_dim]
-        return x                                 # sequence of 16 patch tokens
+
+        # Add spatial positional signal to each patch token.
+        positions = torch.arange(H * W, device=x.device)   # [16]
+        x = x + self.patch_pos(positions)                   # [B, 16, out_dim]
+        return x                                            # sequence of 16 patch tokens
 
 
 class TextEncoder(nn.Module):

@@ -109,6 +109,10 @@ LR           = 1e-3
 WEIGHT_DECAY = 1e-4
 WARMUP_EPOCHS = 2
 LABEL_SMOOTH  = 0.05
+# Override the auto-computed pos_weight (neg/pos ratio ~0.37).
+# Higher value penalises false positives more → improves TNR.
+# Set to None to use the automatic class-balance ratio.
+POS_WEIGHT_OVERRIDE = 1.0
 
 # -------------------------------------------------------
 # Device
@@ -133,7 +137,7 @@ print(
     f"  --- Training ---\n"
     f"  NUM_EPOCHS  : {NUM_EPOCHS}  |  WARMUP: {WARMUP_EPOCHS}\n"
     f"  LR          : {LR} (text_enc: {LR*0.3})  |  WEIGHT_DECAY: {WEIGHT_DECAY}\n"
-    f"  LABEL_SMOOTH: {LABEL_SMOOTH}\n"
+    f"  LABEL_SMOOTH: {LABEL_SMOOTH}  |  POS_WEIGHT: {POS_WEIGHT_OVERRIDE or 'auto'}\n"
     f"{'='*60}\n"
 )
 
@@ -230,8 +234,10 @@ model = VizWizBinaryClassifier(
 
 num_pos = sum(int(a["answerable"]) for a in train_annotations)
 num_neg = len(train_annotations) - num_pos
-pos_weight = torch.tensor([num_neg / num_pos], dtype=torch.float32).to(DEVICE)
-print(f"Class balance — pos: {num_pos}, neg: {num_neg}, pos_weight: {pos_weight.item():.3f}")
+auto_pw = num_neg / num_pos
+pw_value = POS_WEIGHT_OVERRIDE if POS_WEIGHT_OVERRIDE is not None else auto_pw
+pos_weight = torch.tensor([pw_value], dtype=torch.float32).to(DEVICE)
+print(f"Class balance — pos: {num_pos}, neg: {num_neg}, auto_pw: {auto_pw:.3f}, using pw: {pw_value:.3f}")
 print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
 # Label smoothing applied manually to targets (see config section above)
