@@ -121,7 +121,7 @@ print(f"Train: {len(train_annotations)} | Val: {len(val_annotations)}")
 # Vocabularies
 # -------------------------------------------------------
 q_vocab   = build_vocab([a["question"] for a in train_annotations], min_freq=1)
-ans_vocab = build_answer_vocab(train_annotations, min_freq=2)
+ans_vocab = build_answer_vocab(train_annotations, min_freq=3)
 inv_ans_vocab = {v: k for k, v in ans_vocab.items()}
 
 SOS_IDX = ans_vocab["<sos>"]
@@ -199,7 +199,7 @@ unanswerable_idx = ans_vocab.get("unanswerable")
 if unanswerable_idx is not None:
     class_weights[unanswerable_idx] = 0.3
     print(f"Down-weighting 'unanswerable' (idx={unanswerable_idx}) to 0.3")
-criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX, weight=class_weights)
+criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX, weight=class_weights, label_smoothing=0.1)
 
 optimizer = torch.optim.AdamW([
     {"params": model.image_encoder.parameters(),   "lr": LR},
