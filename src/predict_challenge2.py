@@ -26,7 +26,7 @@ _src  = Path(__file__).resolve().parent
 sys.path.insert(0, str(_root))
 sys.path.insert(0, str(_src))
 
-from src.dataset import VizWizAnswerDataset, build_vocab, build_answer_vocab, encode_answer
+from src.dataset import VizWizAnswerDataset, build_vocab, build_answer_vocab, encode_answer, encode_text
 from answer_generator import VizWizAnswerGenerator
 from binary_classifier import VizWizBinaryClassifier
 
@@ -100,9 +100,18 @@ def main():
     print(f"Generator:         {sum(p.numel() for p in generator.parameters()):,} params")
 
     # ---- Binary classifier gate model ----
-    # Uses the same q_vocab — both models encode questions the same way
+    # The binary classifier was trained on 10k samples → different vocab size.
+    # Rebuild its vocab from the train set the same way predict_challenge1.py does.
+    train_ann_path = ann_base / "train.json"
+    with open(train_ann_path) as f:
+        all_train = json.load(f)
+    train_available = {p.name for p in find_image_dir(DATA_ROOT / "train").glob("*.jpg")}
+    train_annotations_bin = [a for a in all_train if a["image"] in train_available][:10_000]
+    binary_q_vocab = build_vocab([a["question"] for a in train_annotations_bin], min_freq=1)
+    print(f"Binary classifier q_vocab: {len(binary_q_vocab)}")
+
     binary = VizWizBinaryClassifier(
-        vocab_size=len(q_vocab), embed_dim=256, num_heads=4,
+        vocab_size=len(binary_q_vocab), embed_dim=256, num_heads=4,
         num_layers=2, max_len=20, dropout=0.3,
     ).to(device)
     binary.load_state_dict(torch.load(args.binary_checkpoint, map_location=device))
@@ -130,8 +139,14 @@ def main():
             images   = batch["image"].to(device)
             q_tokens = batch["q_tokens"].to(device)
 
-            # Step 1: binary classifier gate — q_tokens same vocab as binary model
-            p_answerable = binary(images, q_tokens).sigmoid().squeeze(1)  # [B]
+            # Step 1: binary classifier gate
+            # Binary classifier has its own (larger) vocab — encode separately
+            bin_token_list = []
+            for img_name in batch["image_name"]:
+                ann = next(a for a in test_annotations if a["image"] == img_name)
+                bin_token_list.append(encode_text(ann["question"], binary_q_vocab, 20))
+            bin_tokens = torch.stack(bin_token_list).to(device)
+            p_answerable = binary(images, bin_tokens).sigmoid().squeeze(1)  # [B]
 
             # Step 2: generator output for all (we'll override gated ones)
             gen_ids = generator.greedy_decode(images, q_tokens)  # [B, ANS_MAX_LEN]
