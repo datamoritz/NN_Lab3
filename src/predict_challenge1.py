@@ -65,6 +65,10 @@ def main():
         all_test = json.load(f)
 
     test_annotations = all_test[100:200]   # second 100 samples (inclusive)
+    # Test annotations don't have 'answerable' — add a dummy value so
+    # VizWizBinaryDataset doesn't KeyError (label is not used for prediction)
+    for ann in test_annotations:
+        ann.setdefault("answerable", 0)
     print(f"Test samples (indices 100–199): {len(test_annotations)}")
 
     # ---- Rebuild vocab from train set ----
