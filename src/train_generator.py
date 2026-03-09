@@ -159,10 +159,19 @@ val_dataset = VizWizAnswerDataset(
     val_annotations, VAL_IMAGE_DIR, q_vocab, ans_vocab,
     q_max_len=Q_MAX_LEN, ans_max_len=ANS_MAX_LEN, transform=val_transform,
 )
+def collate_fn(batch):
+    """Default collate except 'answers' (list of dicts) is kept as a plain list."""
+    from torch.utils.data import default_collate
+    answers = [item.pop("answers") for item in batch]
+    collated = default_collate(batch)
+    collated["answers"] = answers
+    return collated
+
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,
                           num_workers=NUM_WORKERS, pin_memory=(DEVICE.type == "cuda"))
 val_loader   = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False,
-                          num_workers=NUM_WORKERS, pin_memory=(DEVICE.type == "cuda"))
+                          num_workers=NUM_WORKERS, pin_memory=(DEVICE.type == "cuda"),
+                          collate_fn=collate_fn)
 
 # -------------------------------------------------------
 # Model
