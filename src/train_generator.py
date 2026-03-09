@@ -121,7 +121,7 @@ print(f"Train: {len(train_annotations)} | Val: {len(val_annotations)}")
 # Vocabularies
 # -------------------------------------------------------
 q_vocab   = build_vocab([a["question"] for a in train_annotations], min_freq=1)
-ans_vocab = build_answer_vocab(train_annotations, min_freq=3)
+ans_vocab = build_answer_vocab(train_annotations, min_freq=4)
 inv_ans_vocab = {v: k for k, v in ans_vocab.items()}
 
 SOS_IDX = ans_vocab["<sos>"]
