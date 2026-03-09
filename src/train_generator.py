@@ -191,8 +191,15 @@ model = VizWizAnswerGenerator(
 
 print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
-# Ignore <pad> tokens in loss so they don't affect gradient
-criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX)
+# Down-weight "unanswerable" to prevent mode collapse.
+# Without this, the model learns that always predicting "unanswerable"
+# minimises loss because it is the single most frequent answer word.
+class_weights = torch.ones(len(ans_vocab), device=DEVICE)
+unanswerable_idx = ans_vocab.get("unanswerable")
+if unanswerable_idx is not None:
+    class_weights[unanswerable_idx] = 0.3
+    print(f"Down-weighting 'unanswerable' (idx={unanswerable_idx}) to 0.3")
+criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX, weight=class_weights)
 
 optimizer = torch.optim.AdamW([
     {"params": model.image_encoder.parameters(),   "lr": LR},
