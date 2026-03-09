@@ -169,8 +169,8 @@ train_transform = transforms.Compose([
     transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
     # Answerability augmentation: simulate blurry/low-quality images that
     # are characteristic of unanswerable VizWiz samples.
-    transforms.RandomApply([transforms.GaussianBlur(kernel_size=5, sigma=(0.5, 2.0))], p=0.3),
-    transforms.RandomAdjustSharpness(sharpness_factor=0, p=0.2),
+    transforms.RandomApply([transforms.GaussianBlur(kernel_size=5, sigma=(0.5, 2.0))], p=0.1),
+    transforms.RandomAdjustSharpness(sharpness_factor=0.5, p=0.1),
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
