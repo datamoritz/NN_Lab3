@@ -24,7 +24,7 @@ sys.path.insert(0, str(_root))
 sys.path.insert(0, str(_src))
 
 from src.dataset import VizWizAnswerDataset, build_vocab, build_answer_vocab
-from models.answer_generator import VizWizAnswerGenerator
+from answer_generator import VizWizAnswerGenerator
 
 
 def find_image_dir(base: Path) -> Path:

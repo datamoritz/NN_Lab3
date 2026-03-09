@@ -24,7 +24,7 @@ sys.path.insert(0, str(_root))
 sys.path.insert(0, str(_src))
 
 from src.dataset import VizWizBinaryDataset, build_vocab
-from models.binary_classifier import VizWizBinaryClassifier
+from binary_classifier import VizWizBinaryClassifier
 
 
 def find_image_dir(base: Path) -> Path:

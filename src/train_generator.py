@@ -25,7 +25,7 @@ from src.dataset import (
     VizWizAnswerDataset, build_vocab, build_answer_vocab,
     get_majority_answer, encode_text,
 )
-from models.answer_generator import VizWizAnswerGenerator
+from answer_generator import VizWizAnswerGenerator
 
 
 def find_image_dir(base: Path) -> Path:
