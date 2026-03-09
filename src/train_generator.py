@@ -23,7 +23,7 @@ sys.path.insert(0, str(_src))
 
 from src.dataset import (
     VizWizAnswerDataset, build_vocab, build_answer_vocab,
-    get_majority_answer, encode_text,
+    get_majority_answer, encode_text, vizwiz_accuracy,
 )
 from answer_generator import VizWizAnswerGenerator
 
@@ -121,7 +121,7 @@ print(f"Train: {len(train_annotations)} | Val: {len(val_annotations)}")
 # Vocabularies
 # -------------------------------------------------------
 q_vocab   = build_vocab([a["question"] for a in train_annotations], min_freq=1)
-ans_vocab = build_answer_vocab(train_annotations, min_freq=1)
+ans_vocab = build_answer_vocab(train_annotations, min_freq=2)
 inv_ans_vocab = {v: k for k, v in ans_vocab.items()}
 
 SOS_IDX = ans_vocab["<sos>"]
@@ -240,15 +240,18 @@ for epoch in range(1, NUM_EPOCHS + 1):
 
     scheduler.step()
 
-    # ---- Validate (exact match accuracy on majority answer) ----
+    # ---- Validate: VizWiz official accuracy + exact match ----
     model.eval()
-    correct = total = 0
+    total = 0
+    sum_vizwiz = 0.0
+    exact_correct = 0
 
     with torch.no_grad():
         for batch in val_loader:
-            images   = batch["image"].to(DEVICE)
-            q_tokens = batch["q_tokens"].to(DEVICE)
-            targets  = batch["answer_text"]   # list of strings
+            images      = batch["image"].to(DEVICE)
+            q_tokens    = batch["q_tokens"].to(DEVICE)
+            targets     = batch["answer_text"]   # majority-vote strings
+            all_answers = batch["answers"]        # list of raw answer dicts per sample
 
             pred_ids = model.greedy_decode(images, q_tokens)  # [B, ANS_MAX_LEN]
 
@@ -256,21 +259,26 @@ for epoch in range(1, NUM_EPOCHS + 1):
                 pred_tokens = [inv_ans_vocab.get(t.item(), "") for t in pred_ids[i]
                                if t.item() not in (PAD_IDX, SOS_IDX, EOS_IDX)]
                 pred_text = " ".join(pred_tokens).strip()
+
+                # VizWiz official score: min(matching annotators / 3, 1)
+                vz_score = vizwiz_accuracy(pred_text, all_answers[i])
+                sum_vizwiz += vz_score
+
                 if pred_text == targets[i].strip():
-                    correct += 1
+                    exact_correct += 1
                 total += 1
 
                 # Print first 5 predictions per epoch for a sanity check
                 if total <= 5:
-                    q_text = batch["image_name"][i] if "image_name" in batch else f"sample_{total}"
-                    print(f"  [sample {total}] GT: '{targets[i]}' | Pred: '{pred_text}'")
+                    print(f"  [sample {total}] GT: '{targets[i]}' | Pred: '{pred_text}' | VizWiz: {vz_score:.2f}")
 
-    val_acc  = correct / total if total > 0 else 0.0
-    avg_loss = train_loss / len(train_loader)
-    is_best  = val_acc > best_val_acc
+    vizwiz_acc = sum_vizwiz / total if total > 0 else 0.0
+    exact_acc  = exact_correct / total if total > 0 else 0.0
+    avg_loss   = train_loss / len(train_loader)
+    is_best    = vizwiz_acc > best_val_acc   # save on VizWiz accuracy (official metric)
 
     if is_best:
-        best_val_acc = val_acc
+        best_val_acc = vizwiz_acc
         torch.save({
             "model_state": model.state_dict(),
             "q_vocab":     q_vocab,
@@ -279,9 +287,9 @@ for epoch in range(1, NUM_EPOCHS + 1):
 
     print(
         f"Epoch {epoch:02d}/{NUM_EPOCHS} | Loss: {avg_loss:.4f} | "
-        f"Val ExactMatch: {val_acc:.4f} | LR: {scheduler.get_last_lr()[0]:.6f}"
+        f"VizWiz: {vizwiz_acc:.4f} | ExactMatch: {exact_acc:.4f} | LR: {scheduler.get_last_lr()[0]:.6f}"
         + (" <- best" if is_best else "")
     )
 
-print(f"\nBest val exact-match accuracy: {best_val_acc:.4f}")
+print(f"\nBest val VizWiz accuracy: {best_val_acc:.4f}")
 print(f"Checkpoint saved to {CHECKPOINT_PATH}")

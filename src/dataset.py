@@ -47,6 +47,15 @@ def build_answer_vocab(annotations, min_freq=1):
     return vocab
 
 
+# VizWiz official accuracy: min(# annotators who match / 3, 1)
+def vizwiz_accuracy(pred_text, answers):
+    if not answers or not pred_text.strip():
+        return 0.0
+    pred = pred_text.strip().lower()
+    count = sum(1 for a in answers if a.get("answer", "").strip().lower() == pred)
+    return min(count / 3, 1.0)
+
+
 # Pick the most common answer from the annotator list (majority vote)
 def get_majority_answer(answers):
     if not answers:
@@ -195,5 +204,6 @@ class VizWizAnswerDataset(Dataset):
             "q_tokens":    q_tokens,
             "ans_tokens":  ans_tokens,
             "answer_text": answer_text,
+            "answers":     sample.get("answers", []),   # raw list for VizWiz accuracy
             "image_name":  sample["image"],
         }
