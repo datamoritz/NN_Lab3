@@ -82,8 +82,17 @@ print(f"  'unanswerable' index: {answer_vocab.get('unanswerable', 'NOT IN VOCAB'
 # -------------------------------------------------------
 train_dataset = CLIPAnswerDataset(train_anns, train_indices, vis_train, txt_train, answer_vocab, top_answers)
 val_dataset   = CLIPAnswerDataset(val_anns,   val_indices,   vis_val,   txt_val,   answer_vocab, top_answers)
+def collate_fn(batch):
+    """Keep 'answers' (list of dicts) as a plain Python list — not collated by torch."""
+    from torch.utils.data import default_collate
+    answers = [item.pop("answers") for item in batch]
+    collated = default_collate(batch)
+    collated["answers"] = answers
+    return collated
+
 train_loader  = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,  num_workers=2)
-val_loader    = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, num_workers=2)
+val_loader    = DataLoader(val_dataset,   batch_size=BATCH_SIZE, shuffle=False, num_workers=2,
+                           collate_fn=collate_fn)
 
 # -------------------------------------------------------
 # Model
