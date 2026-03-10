@@ -25,7 +25,7 @@ def main():
     parser.add_argument("--name",       required=True)
     parser.add_argument("--challenge",  default="4", choices=["2", "4"])
     parser.add_argument("--checkpoint", default="/content/best_clip_answer.pt")
-    parser.add_argument("--feat_root",  default="/content/drive/MyDrive/NN Lab3/Data")
+    parser.add_argument("--feat_root",  default="/content/clip_features")
     parser.add_argument("--data_root",  default="/content/data")
     args = parser.parse_args()
 
@@ -41,8 +41,8 @@ def main():
     print(f"Answer vocab: {len(top_answers)} classes")
 
     # Load test features (indices 100-199)
-    vis_test = torch.load(FEAT_ROOT / "test_image_features.pkl", map_location="cpu")
-    txt_test = torch.load(FEAT_ROOT / "test_text_features.pkl",  map_location="cpu")
+    vis_test = torch.load(FEAT_ROOT / "VizWiz_test_CLIP_Image.pkl", map_location="cpu")
+    txt_test = torch.load(FEAT_ROOT / "VizWiz_test_CLIP_Text.pkl",  map_location="cpu")
     vis_test = vis_test[100:200].to(device)
     txt_test = txt_test[100:200].to(device)
     print(f"Test features: {vis_test.shape}")

@@ -24,7 +24,7 @@ from clip_dataset import CLIPAnswerDataset, build_clip_answer_vocab, vizwiz_accu
 # Config
 # -------------------------------------------------------
 DATA_ROOT  = Path("/content/data")
-FEAT_ROOT  = Path("/content/drive/MyDrive/NN Lab3/Data")
+FEAT_ROOT  = Path("/content/clip_features")
 
 ANN_PATH   = DATA_ROOT / "Annotations"
 if not (ANN_PATH / "train.json").exists():
@@ -53,10 +53,10 @@ print(f"Training on: {device}")
 # -------------------------------------------------------
 # Load features and annotations
 # -------------------------------------------------------
-vis_train = torch.load(FEAT_ROOT / "train_image_features.pkl", map_location="cpu")
-txt_train = torch.load(FEAT_ROOT / "train_text_features.pkl",  map_location="cpu")
-vis_val   = torch.load(FEAT_ROOT / "val_image_features.pkl",   map_location="cpu")
-txt_val   = torch.load(FEAT_ROOT / "val_text_features.pkl",    map_location="cpu")
+vis_train = torch.load(FEAT_ROOT / "VizWiz_train_CLIP_Image.pkl", map_location="cpu")
+txt_train = torch.load(FEAT_ROOT / "VizWiz_train_CLIP_Text.pkl",  map_location="cpu")
+vis_val   = torch.load(FEAT_ROOT / "VizWiz_val_CLIP_Image.pkl",   map_location="cpu")
+txt_val   = torch.load(FEAT_ROOT / "VizWiz_val_CLIP_Text.pkl",    map_location="cpu")
 
 with open(ANN_PATH / "train.json") as f:
     all_train = json.load(f)
