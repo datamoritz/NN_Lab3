@@ -52,7 +52,7 @@ VAL_ANN_PATH    = _ann_base / "val.json"
 CHECKPOINT_PATH  = Path("/content/best_generator.pt")
 THRESHOLD_PATH   = Path("/content/best_threshold.pt")   # from binary training
 
-FAST_MODE = True
+FAST_MODE = False
 
 IMG_SIZE          = 128   if FAST_MODE else 224
 MAX_TRAIN_SAMPLES = 5_000 if FAST_MODE else 10_000
