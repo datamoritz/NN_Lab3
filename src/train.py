@@ -35,6 +35,7 @@ for zip_name, dest in [
 ─────────────────────────────────────────────────────────────
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -49,6 +50,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.dataset import VizWizBinaryDataset, build_vocab
 from src.model import VizWizBinaryClassifier
+
+_parser = argparse.ArgumentParser()
+_parser.add_argument("--mode", default="FULL", choices=["FAST", "FULL"],
+                     help="FAST: 128px/5k samples/10 epochs  FULL: 224px/10k samples/20 epochs")
+_args = _parser.parse_args()
 
 
 def find_image_dir(base: Path) -> Path:
@@ -86,7 +92,7 @@ CHECKPOINT_PATH = Path("/content/best_model.pt")
 #   - 10 epochs
 # Set False for the final full-quality run.
 # -------------------------------------------------------
-FAST_MODE = False
+FAST_MODE = (_args.mode == "FAST")
 
 IMG_SIZE          = 128        if FAST_MODE else 224
 MAX_TRAIN_SAMPLES = 5_000      if FAST_MODE else 10_000

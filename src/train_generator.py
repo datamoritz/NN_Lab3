@@ -7,6 +7,7 @@ COLAB SETUP (same data extraction as train_binary.py — skip if already done):
     !python src/train_generator.py
 """
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -26,6 +27,13 @@ from src.dataset import (
     get_majority_answer, encode_text, vizwiz_accuracy,
 )
 from answer_generator import VizWizAnswerGenerator
+
+_parser = argparse.ArgumentParser()
+_parser.add_argument("--mode", default="FULL", choices=["FAST", "FULL"],
+                     help="FAST: 128px/5k samples/10 epochs  FULL: 224px/10k samples/20 epochs")
+_parser.add_argument("--layers", default=2, type=int,
+                     help="Number of Transformer layers in encoder and decoder (default: 2)")
+_args = _parser.parse_args()
 
 
 def find_image_dir(base: Path) -> Path:
@@ -52,7 +60,7 @@ VAL_ANN_PATH    = _ann_base / "val.json"
 CHECKPOINT_PATH  = Path("/content/best_generator.pt")
 THRESHOLD_PATH   = Path("/content/best_threshold.pt")   # from binary training
 
-FAST_MODE = False
+FAST_MODE = (_args.mode == "FAST")
 
 IMG_SIZE          = 128   if FAST_MODE else 224
 MAX_TRAIN_SAMPLES = 5_000 if FAST_MODE else 10_000
@@ -66,7 +74,7 @@ BATCH_SIZE   = 128
 NUM_WORKERS  = 4
 EMBED_DIM    = 256
 NUM_HEADS    = 4
-NUM_LAYERS   = 2
+NUM_LAYERS   = _args.layers
 DROPOUT      = 0.3
 LR           = 1e-3
 WEIGHT_DECAY = 1e-4
